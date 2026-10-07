@@ -26,7 +26,7 @@ def plot_pmf_1D(
         ) from exc
 
     fig, ax = plt.subplots(
-        figsize=(4, 3)
+        figsize=(6, 4)
     )
 
     ax.plot(
@@ -185,7 +185,7 @@ def plot_pmf_2D(
     bin_size1 = np.mean(np.diff(bin_centers1))
     bin_size2 = np.mean(np.diff(bin_centers2))
 
-    # Extend coordinate arrays beyond the sampled region.
+    # Pad the coordinate arrays beyond the sampled region.
     x_lower = x[0] - bin_size1 * np.arange(
         padding,
         0,
@@ -629,7 +629,7 @@ def plot_pmf_3D(
     fig, axes = plt.subplots(
         3,
         3,
-        figsize=(12, 12),
+        figsize=(10, 10),
         sharex=False,
         sharey=False,
         constrained_layout=True,
@@ -817,17 +817,17 @@ def plot_pmf_3D(
                 alpha=0.2
             )
 
-        axes[row, 0].set_title(
-            "Population"
-        )
+    axes[0, 0].set_title(
+        "Population"
+    )
 
-        axes[row, 1].set_title(
-            "Biased PMF"
-        )
+    axes[0, 1].set_title(
+        "Biased PMF"
+    )
 
-        axes[row, 2].set_title(
-            "Reweighted PMF"
-        )
+    axes[0, 2].set_title(
+        "Reweighted PMF"
+    )
 
     # -----------------------------------------------------------------
     # Colorbars.
@@ -835,8 +835,9 @@ def plot_pmf_3D(
     cbar1 = fig.colorbar(
         im1,
         ax=axes[:, 0],
-        fraction=0.03,
+        fraction=0.11,
         pad=0.02,
+        aspect = 30
     )
 
     cbar1.set_label(
@@ -846,8 +847,9 @@ def plot_pmf_3D(
     cbar2 = fig.colorbar(
         im3,
         ax=axes[:, 1:],
-        fraction=0.03,
+        fraction=0.05,
         pad=0.02,
+        aspect = 30
     )
 
     cbar2.set_label(

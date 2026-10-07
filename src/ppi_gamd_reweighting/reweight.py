@@ -19,6 +19,7 @@ def calc_pmf_1D(
 
     Reweighting uses a second-order cumulant expansion of the GaMD
     boost potential within each reaction-coordinate bin.
+    Based on equation 16 from Miao & McCammon 2017
 
     Parameters
     ----------
@@ -133,6 +134,7 @@ def calc_pmf_1D(
 
     for i in tqdm(range(len(bin_centers)), desc="Reweighting") if progress else range(len(bin_centers)):
         if i == len(bin_centers) - 1:
+            # Make the final bins edge inclusive
             in_bin = (
                 (coord >= edges[i])
                 & (coord <= edges[i + 1])
@@ -150,6 +152,7 @@ def calc_pmf_1D(
 
         p_star = n_frames / total_frames
 
+        # F*(A) = -kBT*ln(p*(A))
         F_star_bin = (
             -BOLTZMANN_KCAL
             * temperature
@@ -159,18 +162,19 @@ def calc_pmf_1D(
         mean_delta_U = np.mean(
             delta_U[in_bin]
         )
-        variance_delta_U = np.var(
+        std_delta_U = np.std(
             delta_U[in_bin]
         )
 
         # Second-order cumulant expansion:
         #
-        # (1 / beta) ln <exp(beta ΔV)>
-        # ≈ <ΔV> + beta / 2 Var(ΔV)
+        # 1/beta*<exp(beta ΔV)>
+        # ≈ 1/beta *(beta*<ΔV> + (beta^2 / 2) std(ΔV)^2)
+        # = <ΔV> + (beta / 2) std(ΔV)^2
         correction = (
             mean_delta_U
             + (beta / 2.0)
-            * variance_delta_U
+            * std_delta_U**2
         )
 
         F_star[i] = F_star_bin
@@ -204,6 +208,7 @@ def calc_pmf_2D(
 
     Reweighting uses a second-order cumulant expansion of the GaMD
     boost potential within each two-dimensional reaction-coordinate bin.
+    Based on equation 16 from Miao & McCammon 2017
 
     Parameters
     ----------
@@ -360,8 +365,7 @@ def calc_pmf_2D(
 
     for i in tqdm(range(len(bin_centers1)), desc="Reweighting") if progress else range(len(bin_centers1)):
         for j in range(len(bin_centers2)):
-            # Include the upper edges in the final bins so that
-            # maximum coordinate values are not discarded.
+            # Make the final bins inclusive
             if i == len(bin_centers1) - 1:
                 in_bin1 = (
                     (X >= edges1[i])
@@ -393,6 +397,7 @@ def calc_pmf_2D(
 
             p_star = n_frames / total_frames
 
+            # F*(A) = -kB*T*ln(p*(A))
             F_star_bin = (
                 -BOLTZMANN_KCAL
                 * temperature
@@ -402,18 +407,19 @@ def calc_pmf_2D(
             mean_delta_U = np.mean(
                 delta_U[in_bin]
             )
-            variance_delta_U = np.var(
+            std_delta_U = np.std(
                 delta_U[in_bin]
             )
 
             # Second-order cumulant expansion:
             #
-            # (1 / beta) ln <exp(beta ΔU)>
-            # ≈ <ΔU> + beta / 2 Var(ΔU)
+            # 1/beta*<exp(beta ΔV)>
+            # ≈ 1/beta *(beta*<ΔV> + (beta^2 / 2) std(ΔV)^2)
+            # = <ΔV> + (beta / 2) std(ΔV)^2
             correction = (
                 mean_delta_U
                 + (beta / 2.0)
-                * variance_delta_U
+                * std_delta_U**2
             )
 
             F_star[i, j] = F_star_bin
@@ -448,6 +454,7 @@ def calc_pmf_3D(
 
     Reweighting uses a second-order cumulant expansion of the GaMD
     boost potential within each two-dimensional reaction-coordinate bin.
+    Based on equation 15 from Miao & McCammon 2017
 
     Parameters
     ----------
@@ -639,8 +646,7 @@ def calc_pmf_3D(
     for i in tqdm(range(len(bin_centers1)), desc="Reweighting") if progress else range(len(bin_centers1)):
         for j in range(len(bin_centers2)):
             for k in range(len(bin_centers3)):
-                # Include the upper edges in the final bins so that
-                # maximum coordinate values are not discarded.
+                # Make the final bins inclusive
                 if i == len(bin_centers1) - 1:
                     in_bin1 = (
                         (X >= edges1[i])
@@ -683,6 +689,7 @@ def calc_pmf_3D(
 
                 p_star = n_frames / total_frames
 
+                # F*(A) = -kBT*ln(p*(A))
                 F_star_bin = (
                     -BOLTZMANN_KCAL
                     * temperature
@@ -692,18 +699,19 @@ def calc_pmf_3D(
                 mean_delta_U = np.mean(
                     delta_U[in_bin]
                 )
-                variance_delta_U = np.var(
+                std_delta_U = np.std(
                     delta_U[in_bin]
                 )
 
                 # Second-order cumulant expansion:
                 #
-                # (1 / beta) ln <exp(beta ΔU)>
-                # ≈ <ΔU> + beta / 2 Var(ΔU)
+                # 1/beta*<exp(beta ΔV)>
+                # ≈ 1/beta *(beta*<ΔV> + (beta^2 / 2) std(ΔV)^2)
+                # = <ΔV> + (beta / 2) std(ΔV)^2
                 correction = (
                     mean_delta_U
                     + (beta / 2.0)
-                    * variance_delta_U
+                    * std_delta_U**2
                 )
 
                 F_star[i, j, k] = F_star_bin

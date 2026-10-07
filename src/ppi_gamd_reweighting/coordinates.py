@@ -47,7 +47,21 @@ def construct_reaction_coord(
     data: pd.DataFrame,
     coord_type: ReactionCoordType,
 ) -> pd.Series:
-    """Construct a reaction coordinate from cpptraj data."""
+    """ Construct a reaction coordinate from cpptraj data.
+       
+        Parameters
+        ----------
+        data
+            DataFrame containing the original cpptraj output coordinate file
+        coord_type
+            A string containing a value from the ReactionCoordType dictionary
+        
+        Returns
+        -------
+        coord
+            pd.Series containing the reaction coordinate value at each step
+            Calculated based on the specified coord_type
+    """
 
     if coord_type == "min_distance":
         coord = data[["dist_A", "dist_B"]].min(axis=1)

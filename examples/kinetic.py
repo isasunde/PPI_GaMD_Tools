@@ -136,11 +136,10 @@ if Fpp_unbound <= 0:
 if Fpp_barrier >= 0:
     print("Warning: barrier curvature is not negative. Barrier may not be well defined.")
     
-print("Curvature of the free energy profile near:"
-    f"Bound: {Fpp_bound:.3e},  "
-    f"Barrier: {Fpp_barrier:.3e}, "
-    f"Unbound: {Fpp_unbound:.3e}"
-)
+print("Curvature of the free energy profile near:")
+print(f"Bound: {Fpp_bound:.3e}")
+print(f"Barrier: {Fpp_barrier:.3e}")
+print(f"Unbound: {Fpp_unbound:.3e}")
 
 # ------------------------------------------------------------
 # Diagnostic PMF plot

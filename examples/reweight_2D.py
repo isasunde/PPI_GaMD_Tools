@@ -12,7 +12,6 @@ from ppi_gamd_reweighting import (
     plot_pmf_2D,
 )
 
-
 # ---------------------------------------------------------------------
 # Input files
 # ---------------------------------------------------------------------
@@ -22,7 +21,6 @@ log_file = example_dir / "GaMD.log"
 
 coord_file1 = example_dir / "dist.dat"
 coord_file2 = example_dir / "rmsd.dat"
-
 
 # ---------------------------------------------------------------------
 # Analysis parameters
@@ -35,7 +33,6 @@ bin_size2 = 0.5
 
 cutoff = 10
 temperature = 300.0
-
 
 # ---------------------------------------------------------------------
 # Load GaMD and reaction-coordinate data
@@ -52,7 +49,6 @@ coord2 = load_reaction_coord(
     coord_type2,
 )
 
-
 # ---------------------------------------------------------------------
 # Construct total PPI-GaMD boost potential
 # ---------------------------------------------------------------------
@@ -61,16 +57,14 @@ delta_U = (
     + log_data["deltaVd"]
 )
 
-
 # ---------------------------------------------------------------------
 # Evaluate boost-potential distribution
 # ---------------------------------------------------------------------
-gamma = calc_anharmonicity(delta_U)
+gamma = calc_anharmonicity(delta_U, temperature)
 
 print(
     f"Boost-potential anharmonicity: {gamma:.3f}"
 )
-
 
 # ---------------------------------------------------------------------
 # Calculate biased and reweighted 2D PMFs
@@ -82,9 +76,17 @@ F_star, F, bin_centers1, bin_centers2, counts = calc_pmf_2D(
     cutoff=cutoff,
     bin_size1=bin_size1,
     bin_size2=bin_size2,
-    temperature=temperature,
+    temperature=temperature
 )
 
+# ---------------------------------------------------------------------
+# Evaluate boost-potential distribution with no. of bins from PMF
+# ---------------------------------------------------------------------
+gamma = calc_anharmonicity(delta_U, temperature, bins = (len(bin_centers1)*len(bin_centers2)))
+
+print(
+    f"Boost-potential anharmonicity: {gamma:.3f}"
+)
 
 # ---------------------------------------------------------------------
 # Plot PMFs and population map

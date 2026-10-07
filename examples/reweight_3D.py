@@ -64,7 +64,7 @@ delta_U = (
 # ---------------------------------------------------------------------
 # Evaluate boost-potential distribution
 # ---------------------------------------------------------------------
-gamma = calc_anharmonicity(delta_U)
+gamma = calc_anharmonicity(delta_U, temperature)
 
 print(
     f"Boost-potential anharmonicity: {gamma:.3f}"
@@ -81,6 +81,15 @@ F_star, F, bin_centers1, bin_centers2, bin_centers3, counts = calc_pmf_3D(
     cutoff=cutoff,
     bin_size=bin_size,
     temperature=temperature,
+)
+
+# ---------------------------------------------------------------------
+# Evaluate boost-potential distribution on no. bins from PMF
+# ---------------------------------------------------------------------
+gamma = calc_anharmonicity(delta_U, temperature, bins = len(bin_centers1)*len(bin_centers2)*len(bin_centers3))
+
+print(
+    f"Boost-potential anharmonicity: {gamma:.3f}"
 )
 
 # ---------------------------------------------------------------------
