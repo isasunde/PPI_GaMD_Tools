@@ -5,13 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ppi-gamd-reweighting"
 version = "0.1.0"
+authors = [
+    {name="Isabella K. Sundenæs", email="isasunde@gmail.com"}
+    ]
 description = "Tools for energetic reweighting of PPI-GaMD simulations"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "pandas",
     "matplotlib",
 ]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/isasunde/PPI_GaMD_Tools"
 
 [tool.setuptools.packages.find]
 where = ["src"]
