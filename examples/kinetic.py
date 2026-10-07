@@ -16,6 +16,7 @@ from ppi_gamd_reweighting import (
     find_residence_times,
     plot_minima_diagnostics,
     solve_smoluchowski,
+    calc_kinetic_params
 )
 
 BOLTZMANN_KCAL = 0.0019872041  # kcal mol^-1 K^-1
@@ -32,14 +33,16 @@ coord_type = "min_distance"
 bin_size = 1.0
 cutoff = 10
 temperature = 300.0
+time_step = dt = 0.002      # In nanoseconds
+
 # Simulation box volume
 Vol_A3 = 137.607**3 
 Vol_L = Vol_A3 * 1e-27
 conc = 1.0 / (NA * Vol_L)
 
 # Kinetic parameters
-rb = 10
-ru = 15
+rb = 20
+ru = 25
 curv_window = 3
 
 # Load GaMD and reaction-coordinate data
@@ -57,7 +60,7 @@ delta_V = (
 )
 
 # Evaluate boost-potential distribution
-gamma = calc_anharmonicity(delta_V)
+gamma = calc_anharmonicity(delta_V, temperature)
 
 print(
     f"Boost-potential anharmonicity: {gamma:.3f}"
@@ -73,6 +76,13 @@ F_star, F, bin_centers = calc_pmf_1D(
     progress=True,
 )
 
+# Evaluate boost-potential distribution on no. of bins from reweighting
+gamma = calc_anharmonicity(delta_V, temperature, bins = len(bin_centers))
+
+print(
+    f"Boost-potential anharmonicity: {gamma:.3f}"
+)
+
 # Plot PMFs
 fig, ax = plot_pmf_1D(
     F_star=F_star,
@@ -80,14 +90,7 @@ fig, ax = plot_pmf_1D(
     bin_centers=bin_centers,
     coord_type=coord_type,
 )
-
 plt.show()
-
-# Should the PMF be trimmed??
-# Smooth finite PMF only
-#F_solver = gaussian_filter1d(F, sigma=smooth_sigma)
-#F_solver -= np.nanmin(F_solver)
-#dx = np.mean(np.diff(x_raw))
 
 # ------------------------------------------------------------
 # Identify bound and unbound minima
@@ -99,7 +102,7 @@ bound, unbound, barrier = find_wells(
     ru_cutoff=ru,
 
 )
-print(f"Bound minimum at {bin_centers[bound]:.3f}, F = {F[bound]:.3f} kcal/mol")
+print(f"\nBound minimum at {bin_centers[bound]:.3f}, F = {F[bound]:.3f} kcal/mol")
 print(f"Bound unbound minimum at {bin_centers[unbound]:.3f}, F = {F[unbound]:.3f} kcal/mol")
 
 print(
@@ -108,7 +111,7 @@ print(
     )
 
 # ------------------------------------------------------------
-# Local quadratic curvatures
+# Find curvatures through local quadratic curvatures
 # ------------------------------------------------------------
 curvatures = {}
 frequencies = {}
@@ -122,7 +125,7 @@ for name, idx in [
         F,
         bin_centers,
         idx,
-        curv_window=curv_window
+        fit_window=curv_window
     )
 
 Fpp_bound = curvatures["bound"]
@@ -136,11 +139,15 @@ if Fpp_unbound <= 0:
 if Fpp_barrier >= 0:
     print("Warning: barrier curvature is not negative. Barrier may not be well defined.")
     
-print("Curvature of the free energy profile near:")
+print("\nCurvature of the free energy profile near:")
 print(f"Bound: {Fpp_bound:.3e}")
 print(f"Barrier: {Fpp_barrier:.3e}")
 print(f"Unbound: {Fpp_unbound:.3e}")
 
+print("\nFrequencies of the free energy profile near:")
+print(f"Bound: {frequencies['bound']:.3e}")
+print(f"Barrier: {frequencies['barrier']:.3e}")
+print(f"Unbound: {frequencies['unbound']:.3e}")
 # ------------------------------------------------------------
 # Diagnostic PMF plot
 # ------------------------------------------------------------
@@ -159,12 +166,11 @@ plt.show()
 # Direct residence times from trajectory
 # ------------------------------------------------------------
 tau_b, tau_u = find_residence_times(
-    F=F,
     boost=delta_V,
     x=coord,
     rb_cutoff=rb,
     ru_cutoff=ru,
-    frame_dt=log_data["frame_dt"],
+    frame_dt=time_step,
     min_event_duration=1.0,  # ns
 )
 
@@ -189,12 +195,14 @@ for i in range(bound - 1, 0, -1):
     if F[i] > F[i - 1] and F[i] > F[i + 1]:
         bound_start = i
         break
+print(f'Bound minima found to start at bin {bound_start} corresponding to {bin_centers[bound_start]}')
 
 result_off = solve_smoluchowski(
     F=F,
     x=bin_centers,
     well_start=bound_start,
     barrier=barrier,
+    temperature=temperature,
     D=1.0,
     left_boundary="Reflective",
     right_boundary="Absorbing",
@@ -209,7 +217,6 @@ print("dt used:", result_off["dt"])
 
 if not np.isfinite(result_off["k_model"]) or result_off["k_model"] <= 0:
     print(f"Invalid Smoluchowski off-rate model. Skipping.")
-
 
 # ------------------------------------------------------------
 # Unbound-state interval for association Smoluchowski solver
@@ -226,6 +233,7 @@ result_on = solve_smoluchowski(
     x=bin_centers,
     well_start=barrier,
     barrier=unbound_end,
+    temperature=temperature,
     D=1.0,
     left_boundary="Absorbing",
     right_boundary="Reflective",
@@ -241,44 +249,27 @@ if not np.isfinite(result_on["k_model"]) or result_on["k_model"] <= 0:
     print(f"Invalid Smoluchowski on-rate model. Skipping.")
 
 # ------------------------------------------------------------
-# Apparent diffusion coefficients
+# Calculate kinetic parameters
 # ------------------------------------------------------------
-D_off = k_off_star / result_off["k_model"]
-D_on = k_on1_star / result_on["k_model"]
-
-print(f"D_off: {D_off:.3e} Å²/s")
-print(f"D_on:  {D_on:.3e} Å²/s")
-
-kBT = BOLTZMANN_KCAL * temperature
-
-xi_off = kBT/D_off
-xi_on = kBT/D_on
-
-# ------------------------------------------------------------
-# Kramers corrected rates
-# ------------------------------------------------------------
-k_off = (
-    D_off
-    / (2.0 * np.pi * kBT)
-        * np.sqrt(abs(Fpp_bound) * abs(Fpp_barrier))
-        * np.exp(-F[barrier]-F[bound] / kBT)
-    )
-
-k_on1 = (
-    D_on
-    / (2.0 * np.pi * kBT)
-    * np.sqrt(abs(Fpp_unbound) * abs(Fpp_barrier))
-    * np.exp(-F[barrier]-F[unbound] / kBT)
+kinetics = calc_kinetic_params(
+    F = F,
+    barrier = barrier,
+    bound = bound,
+    unbound = unbound,
+    w_b = frequencies['bound'],
+    w_u = frequencies['unbound'],
+    w_br = frequencies['barrier'],
+    k_off_star = k_off_star,
+    k_on1_star = k_on1_star,
+    k_off_model = result_off["k_model"],
+    k_on1_model = result_on["k_model"],
+    temperature = temperature,
+    conc = conc
 )
-k_on = k_on1 / conc
-    
-# Convert first-order association to second-order association
-Kd_M = k_off / k_on
-Ka_M_inv = k_on / k_off
 
 print("\nFinal corrected kinetic estimates")
-print(f"k_off: {k_off:.3e} s^-1")
-print(f"k_on first-order: {k_on1:.3e} s^-1")
-print(f"k_on: {k_on:.3e} M^-1 s^-1")
-print(f"Kd: {Kd_M:.3e} M")
-print(f"Ka: {Ka_M_inv:.3e} M^-1")
+print(f"k_off: {kinetics['k_off']:.3e} s^-1")
+print(f"k_on first-order: {kinetics['k_on1']:.3e} s^-1")
+print(f"k_on: {kinetics['k_on']:.3e} M^-1 s^-1")
+print(f"Kd: {kinetics['Kd_M']:.3e} M")
+print(f"Ka: {kinetics['Ka_M_inv']:.3e} M^-1")

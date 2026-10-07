@@ -6,7 +6,7 @@ from .metrics import calc_anharmonicity
 from .plotting import plot_pmf_1D, plot_pmf_2D, plot_pmf_3D, plot_minima_diagnostics
 from .reweight import calc_pmf_1D, calc_pmf_2D, calc_pmf_3D
 from .energy import binding_free_energy
-from .smolukowski import find_wells, find_curvature, find_residence_times, solve_smoluchowski
+from .smolukowski import find_wells, find_curvature, find_residence_times, solve_smoluchowski, calc_kinetic_params
 
 
 __all__ = [
@@ -25,5 +25,6 @@ __all__ = [
     "find_wells",
     "find_curvature",
     "find_residence_times",
-    "solve_smoluchowski"
+    "solve_smoluchowski",
+    "calc_kinetic_params"
 ]

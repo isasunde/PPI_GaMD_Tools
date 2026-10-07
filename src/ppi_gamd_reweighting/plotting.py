@@ -879,7 +879,7 @@ def plot_minima_diagnostics(
             f"Unknown reaction-coordinate type: {exc.args[0]}"
         ) from exc
 
-    plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(6, 4))
     plt.plot(x, F_star, label="Biased PMF", alpha=0.7)
     plt.plot(x, F, label="Reweighted PMF", alpha=0.7)
     #plt.plot(x, F_solver, label="Smoothed PMF", lw=2)

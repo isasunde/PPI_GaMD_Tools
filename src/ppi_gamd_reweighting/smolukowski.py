@@ -1,9 +1,10 @@
 """Smolukowskii solver for kinetic reweighting of GaMD simulations"""
 
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
-from typing import Literal
+from tqdm import tqdm
+from typing import Literal, get_args
 from numpy.typing import ArrayLike
 from scipy.ndimage import gaussian_filter1d, minimum_filter1d
 from .constants import BOLTZMANN_KCAL
@@ -22,6 +23,8 @@ def find_wells(
     ):
     """
         Find the bound & unbound well of a PMF.
+        Note the function assumes bound responds to lowest coordinate values 
+        As such need to be inversed for i.e. contacts as coordinate
     
         Parameters
         ----------
@@ -73,12 +76,12 @@ def find_wells(
     well_F = F[well_indices]
 
     # ------------------------------------------------------------
-    # Option A: physically guided assignment
+    # Option A: Choice minima based on specified cutoffs
     # ------------------------------------------------------------
-    # Bound candidates: low-distance minima
+    # Bound candidates: Low-distance minima
     bound_candidates = well_indices[well_x <= rb_cutoff]
 
-    # Unbound candidates: high-distance minima
+    # Unbound candidates: High-distance minima
     unbound_candidates = well_indices[well_x >= ru_cutoff]
 
     if len(bound_candidates) > 0 and len(unbound_candidates) > 0:
@@ -94,7 +97,7 @@ def find_wells(
         )
 
         # ------------------------------------------------------------
-        # Option B: fallback based on separated minima
+        # Option B: Fallback based on selection of sufficiently separated minima
         # ------------------------------------------------------------
         # Sort minima by energy
         sorted_wells = well_indices[np.argsort(F[well_indices])]
@@ -115,6 +118,7 @@ def find_wells(
             print(
                 f"No second minimum sufficiently separated from the deepest minimum. "
                 "Skipping kinetic analysis."
+                "Potentially try to decrease distance between rb_cutoff & ru_cutoff"
             )
             return None, None, None
 
@@ -139,10 +143,11 @@ def find_curvature(
         F: ArrayLike,
         bins: ArrayLike,
         idx: int,
-        curv_window: int=3 
+        fit_window: int=3 
     ):
     """
     Find the curvature of a point on a PMF.
+    Based on equation 2 of Miao 2019 with update to use np.polyfit in place of the quadratic function plainly
     
     Parameters
     ----------
@@ -152,24 +157,27 @@ def find_curvature(
     bins : array-like
         Bin centers for the reaction coordinate.
 
-    bin : int
+    idx : int
         Bin index to find curvature for
 
-    curv_window : int
-        No. of bins to include to find curvature
+    fit_window : int
+        No. of bins on either side of idx to include to find curvature
         
     Returns
     -------
-    Fpp
+    ddF
         Curvature at selected bin calculated over the given window
 
     w
         Curvature in frequency at the selected bin
 
     """
-    
-    i0 = max(0, idx - curv_window)
-    i1 = min(len(F), idx + curv_window + 1)
+    if fit_window < 1:
+        raise ValueError('At least 3 bins is required to find curvature using quadratic formula')
+
+    # Find potential bins for fitting
+    i0 = max(0, idx - fit_window)
+    i1 = min(len(F), idx + fit_window + 1)
 
     x_fit = bins[i0:i1]
     F_fit = F[i0:i1]
@@ -177,17 +185,19 @@ def find_curvature(
     valid_fit = np.isfinite(x_fit) & np.isfinite(F_fit)
 
     if np.sum(valid_fit) < 3:
-        print("Not enough bins to get a valid fit")
-        Fpp = np.nan
+        print("Not enough bins within window to get a valid fit")
+        ddF = np.nan
 
     else:
+        # Find curvature at a minima, A_m, from quadratic function 
+        # F(A) = a*A^2 + b*A + c => F''(A) = 2*a
         coeff = np.polyfit(x_fit[valid_fit], F_fit[valid_fit], 2)
-        Fpp = 2.0 * coeff[0]
+        ddF = 2.0 * coeff[0]
 
     # Convert curvatures to frequencies
-    w = np.sqrt(abs(Fpp) / (2*np.pi))
+    w = np.sqrt(abs(ddF)/(2*np.pi))
 
-    return Fpp, w
+    return ddF, w
 
 def find_residence_times(
         boost: ArrayLike,
@@ -211,10 +221,10 @@ def find_residence_times(
         Reaction coordinate throughout trajectory.
     
     min_event_duration : float
-        Minimum duration of one event (in same time unit as dt)
+        Minimum duration of one event in ns
 
     frame_dt : float
-        Time step between each frame (in same time unit as min event duration)
+        Time step between each frame in ns
 
     """
     if len(x) != len(boost):
@@ -227,8 +237,7 @@ def find_residence_times(
     
     print(
         f"Only including bound/unbound events lasting at least "
-        f"{min_event_duration:.1f} ns "
-        f"({min_event_frames} frames)"
+        f"{min_event_duration:.1f} ns, corresponding to ({min_event_frames} frames)"
     )
     
     # State labels:
@@ -317,7 +326,7 @@ def solve_smoluchowski(
     x: ArrayLike,
     well_start: int,
     barrier: int,
-    temperature: int,
+    temperature: float,
     D: float=1.0,
     dt: float|None=None,
     nsteps: int=200000,
@@ -349,7 +358,7 @@ def solve_smoluchowski(
         Right boundary index of the region whose survival probability is followed.
         For dissociation, this is typically the barrier between bound and unbound.
 
-    kBT : float
+    temperature : float
         Thermal energy in same units as F. At 300 K, kBT ≈ 0.596 kcal/mol.
 
     D : float
@@ -396,15 +405,16 @@ def solve_smoluchowski(
     """
 
     kBT = BOLTZMANN_KCAL*temperature
+
     # -----------------------------
     # Validate boundary options
     # -----------------------------
-    if left_boundary not in BoundaryType:
+    if left_boundary not in get_args(BoundaryType):
         raise ValueError(
             f"Left_boundary must be one of {BoundaryType}, got {left_boundary!r}"
         )
-
-    if right_boundary not in BoundaryType:
+    
+    if right_boundary not in get_args(BoundaryType):
         raise ValueError(
             f"Right_boundary must be one of {BoundaryType}, got {right_boundary!r}"
         )
@@ -469,13 +479,12 @@ def solve_smoluchowski(
     if np.any(dxs <= 0):
         raise ValueError("x must be strictly increasing.")
 
-    dx = np.mean(dxs)
-
-    if not np.allclose(dxs, dx, rtol=1e-3, atol=1e-8):
-        print(
+    if not np.allclose(dxs, dxs[0], rtol=1e-6, atol=1e-10):
+        raise(
             "Warning: x spacing is not perfectly uniform. "
-            "Using mean dx for finite-difference propagation."
         )
+
+    dx = dxs[0]
 
     # -----------------------------
     # Boundary sanity checks
@@ -494,18 +503,15 @@ def solve_smoluchowski(
             "so the solver can evaluate the outgoing flux to the right."
         )
 
-    # Reflective boundaries may sit at the edge of the finite PMF.
-    if well_start < 0 or barrier > len(F) - 1:
-        raise ValueError("well_start/barrier are outside the PMF range.")
-
     # -----------------------------
     # Reduced PMF
     # -----------------------------
     F = F - np.nanmin(F)
     u = F / kBT
 
-    interval = slice(well_start, barrier + 1)
-    interval_indices = np.arange(well_start, barrier + 1)
+    # Get indexes & index slices for well
+    interval = slice(well_start, barrier)
+    interval_indices = np.arange(well_start, barrier)
 
     # Minimum inside the selected interval
     xmin_local = well_start + np.nanargmin(u[interval])
@@ -515,9 +521,15 @@ def solve_smoluchowski(
     # -----------------------------
     p = np.zeros_like(u)
 
+    # Set the minima to zero within the well
     u_shift = u[interval] - u[xmin_local]
+
+    # Construct initial probability in well
+    # p_i(0) = e^(-u_i-u_{min}) 
     p[interval] = safe_exp(-u_shift, clip=exp_clip)
 
+    # Normalize probability
+    # p_i(0) = e^(-u_i-u_{min}) /(sum(e^{u-u_{min}})
     norm = np.sum(p[interval])
 
     if not np.isfinite(norm) or norm <= 0:
@@ -529,8 +541,7 @@ def solve_smoluchowski(
     # -----------------------------
     # Estimate stable dt if not given
     # -----------------------------
-    # Explicit Euler stability depends not only on dx and D,
-    # but also on the largest outgoing transition rate.
+    # Delta t_{stable} = s*(dx^2)/(D*max(r_{out}))
     outgoing_rates = []
 
     for i in interval_indices:
@@ -538,16 +549,18 @@ def solve_smoluchowski(
         out_rate = 0.0
 
         # Left outgoing flux
-        if i == well_start and left_boundary == "reflective":
+        if i == well_start and left_boundary == "Reflective":
             left_out = 0.0
         else:
+            # k_(i->i+1) = D/(Delta x^2)*exp(-(u_(i+1) - u_i)/2)
             left_out = safe_exp(-(u[i - 1] - u[i]) / 2.0, clip=exp_clip)
         out_rate += left_out
 
         # Right outgoing flux
-        if i == barrier and right_boundary == "reflective":
+        if i == barrier and right_boundary == "Reflective":
             right_out = 0.0
         else:
+            # k_(i+i -> i) = D/(Delta x^2)*exp(-(u_i - u_(i+1))/2)
             right_out = safe_exp(-(u[i + 1] - u[i]) / 2.0, clip=exp_clip)
         out_rate += right_out
 
@@ -558,6 +571,7 @@ def solve_smoluchowski(
     if max_out_rate <= 0 or not np.isfinite(max_out_rate):
         raise ValueError("Invalid outgoing transition rates.")
 
+    # Delta t_{stable} = s*(dx^2)/(D*max(r_{out}))
     dt_stable = stability_safety * dx**2 / (D * max_out_rate)
 
     if dt is None:
@@ -583,7 +597,7 @@ def solve_smoluchowski(
     # -----------------------------
     # Time propagation
     # -----------------------------
-    for step in range(nsteps):
+    for step in tqdm(range(nsteps), desc = 'Calculating survival function: '):
 
         p_old = p.copy()
         p_new = np.zeros_like(p_old)
@@ -595,11 +609,11 @@ def solve_smoluchowski(
             # -----------------------------------
             if i == well_start:
 
-                if left_boundary == "reflective":
+                if left_boundary == "Reflective":
                     left_in = 0.0
                     left_out = 0.0
 
-                elif left_boundary == "absorbing":
+                elif left_boundary == "Absorbing":
                     # No incoming flux from outside, but probability can leave.
                     left_in = 0.0
                     left_out = safe_exp(
@@ -621,17 +635,17 @@ def solve_smoluchowski(
             # -----------------------------------
             # Right side flux
             # -----------------------------------
-            if i == barrier:
+            if i == barrier - 1:
 
-                if right_boundary == "reflective":
+                if right_boundary == "Reflective":
                     right_in = 0.0
                     right_out = 0.0
 
-                elif right_boundary == "absorbing":
+                elif right_boundary == "Absorbing":
                     # No incoming flux from outside, but probability can leave.
                     right_in = 0.0
                     right_out = safe_exp(
-                        -(u[i + 1] - u[i]) / 2.0,
+                        -(u[barrier] - u[i]) / 2.0,
                         clip=exp_clip
                     )
 
@@ -653,17 +667,19 @@ def solve_smoluchowski(
             outgoing = p_old[i] * (left_out + right_out)
 
             p_new[i] = (
-                p_old[i]
-                +
-                D * (incoming - outgoing) * dt / dx**2
+                p_old[i] + D * (incoming - outgoing) * dt / dx**2
             )
 
         # Avoid tiny negative values from explicit Euler roundoff
+        if np.any(p_new < -1e-14):
+            status = "Unstable: negative probability at step {step}"
+            print(f'Solver became unstable at step {step}')
+            break
         p_new[p_new < 0] = 0.0
 
         if not np.all(np.isfinite(p_new)):
             status = f"unstable: non-finite probability at step {step}"
-            print(f"Solver became unstable at step {step}.")
+            print(status)
             break
 
         S = np.sum(p_new[interval]) / S0
@@ -676,7 +692,7 @@ def solve_smoluchowski(
 
         # With absorbing boundaries, mass should not increase.
         # Small numerical fluctuations are tolerated.
-        if total_mass > 1.01:
+        if total_mass > S0*1.01:
             status = (
                 f"unstable: probability mass increased to "
                 f"{total_mass:.4f} at step {step}"
@@ -710,12 +726,9 @@ def solve_smoluchowski(
 
     fit_mask = (
         np.isfinite(times)
-        &
-        np.isfinite(lnS)
-        &
-        (lnS > fit_low)
-        &
-        (lnS < fit_high)
+        & np.isfinite(lnS)
+        & (lnS > fit_low)
+        & (lnS < fit_high)
     )
 
     if np.sum(fit_mask) >= 3:
@@ -725,13 +738,14 @@ def solve_smoluchowski(
         coeff = None
         k_model = np.nan
         print("Not enough valid points for linear fit.")
+        print("Consider decreasing output stride")
 
     # -----------------------------
     # Diagnostics
     # -----------------------------
     if diagnostic:
 
-        fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+        fig, axes = plt.subplots(2, 2, figsize=(8, 6))
 
         # PMF and boundaries
         axes[0, 0].plot(x, F, lw=2)
@@ -816,4 +830,173 @@ def solve_smoluchowski(
         "left_boundary": left_boundary,
         "right_boundary": right_boundary,
         "status": status,
+    }
+
+def calc_kinetic_params(
+    F: ArrayLike,
+    barrier: int,
+    bound: int,
+    unbound: int,
+    w_b: float,
+    w_u: float,
+    w_br: float,
+    k_off_star: float,
+    k_on1_star: float,
+    k_off_model: float,
+    k_on1_model: float,
+    temperature: float,
+    conc: float,
+):
+    """
+    Calculate apparent diffusion coefficients and Kramers-corrected rates.
+
+    The apparent diffusion coefficients are obtained by comparing the
+    reference/model rates from the Smoluchowski solver with the target
+    rates. The resulting diffusion coefficients are then used in a
+    Kramers expression to calculate corrected dissociation and association
+    rates from the PMF.
+
+    Parameters
+    ----------
+    F : array-like
+        1D PMF in energy units, usually kcal/mol.
+
+    barrier : int
+        Index of the PMF barrier separating the bound and unbound states.
+
+    bound : int
+        Index of the bound-state PMF minimum.
+
+    unbound : int
+        Index of the unbound-state PMF minimum.
+
+    w_b : float
+        Frequency of the PMF at the bound-state minimum.
+
+    w_u : float
+        Frequency of the PMF at the unbound-state minimum.
+
+    w_br : float
+        Frequency of the PMF at the barrier.
+
+    k_off_star : float
+        Reference dissociation rate used to determine the apparent
+        diffusion coefficient for dissociation.
+
+    k_on1_star : float
+        Reference first-order association rate used to determine the
+        apparent diffusion coefficient for association.
+
+    k_off_model : float
+        Dissociation rate obtained from the Smoluchowski model.
+
+    k_on1_model : float
+        First-order association rate obtained from the Smoluchowski model.
+
+    temperature : float
+        Temperature in Kelvin.
+
+    conc : float
+        Concentration used to convert the first-order association rate
+        to a second-order association rate.
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+
+        D_off : float
+            Apparent diffusion coefficient for dissociation.
+
+        D_on : float
+            Apparent diffusion coefficient for association.
+
+        k_off : float
+            Kramers-corrected dissociation rate.
+
+        k_on1 : float
+            Kramers-corrected first-order association rate.
+
+        k_on : float
+            Kramers-corrected second-order association rate.
+
+        Kd_M : float
+            Dissociation constant calculated as k_off / k_on.
+
+        Ka_M_inv : float
+            Association constant calculated as k_on / k_off.
+
+        deltaF_off : float
+            Free-energy barrier for dissociation.
+
+        deltaF_on : float
+            Free-energy barrier for association.
+
+    """
+
+    F = np.asarray(F, dtype=float)
+
+    if temperature <= 0:
+        raise ValueError("Temperature must be positive.")
+
+    if conc <= 0:
+        raise ValueError("Concentration must be positive.")
+
+    if k_off_model <= 0:
+        raise ValueError("k_off_model must be positive.")
+
+    if k_on1_model <= 0:
+        raise ValueError("k_on1_model must be positive.")
+
+    kBT = BOLTZMANN_KCAL * temperature
+
+    # ------------------------------------------------------------
+    # Apparent diffusion coefficients
+    # ------------------------------------------------------------
+    D_off = k_off_star / k_off_model
+    D_on = k_on1_star / k_on1_model
+
+    # ------------------------------------------------------------
+    # Free-energy barriers
+    # ------------------------------------------------------------
+    deltaF_off = F[barrier] - F[bound]
+    deltaF_on = F[barrier] - F[unbound]
+
+    # ------------------------------------------------------------
+    # Kramers-corrected rates
+    # ------------------------------------------------------------
+    # xi = kBT/D
+    xi_off = kBT/D_off
+    xi_on = kBT/D_on
+
+    # k_off = (2*pi*w_m*w_b)/xi * e^(-DeltaF/kBT)
+    k_off = (
+        (2.0 * np.pi * w_b * w_br) / xi_off
+        * np.exp(-deltaF_off / kBT)
+    )
+
+    k_on1 = (
+        (2.0 * np.pi * w_u * w_br) / xi_on
+        * np.exp(-deltaF_on / kBT)
+    )
+
+    # Convert first-order association rate to second-order association
+    k_on = k_on1 / conc
+
+    # ------------------------------------------------------------
+    # Equilibrium constants
+    # ------------------------------------------------------------
+    Kd_M = k_off / k_on
+    Ka_M_inv = k_on / k_off
+
+    return {
+        "D_off": D_off,
+        "D_on": D_on,
+        "k_off": k_off,
+        "k_on1": k_on1,
+        "k_on": k_on,
+        "Kd_M": Kd_M,
+        "Ka_M_inv": Ka_M_inv,
+        "deltaF_off": deltaF_off,
+        "deltaF_on": deltaF_on
     }
