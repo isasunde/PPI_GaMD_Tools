@@ -128,21 +128,17 @@ for name, idx in [
         fit_window=curv_window
     )
 
-Fpp_bound = curvatures["bound"]
-Fpp_barrier = curvatures["barrier"]
-Fpp_unbound = curvatures["unbound"]
-
-if Fpp_bound <= 0:
+if curvatures["bound"] <= 0:
     print("Warning: bound-state curvature is not positive.")
-if Fpp_unbound <= 0:
+if curvatures["unbound"] <= 0:
     print("Warning: unbound-state curvature is not positive.")
-if Fpp_barrier >= 0:
+if curvatures["barrier"] >= 0:
     print("Warning: barrier curvature is not negative. Barrier may not be well defined.")
     
 print("\nCurvature of the free energy profile near:")
-print(f"Bound: {Fpp_bound:.3e}")
-print(f"Barrier: {Fpp_barrier:.3e}")
-print(f"Unbound: {Fpp_unbound:.3e}")
+print(f"Bound: {curvatures["bound"]:.3e}")
+print(f"Barrier: {curvatures["barrier"]:.3e}")
+print(f"Unbound: {curvatures["unbound"]:.3e}")
 
 print("\nFrequencies of the free energy profile near:")
 print(f"Bound: {frequencies['bound']:.3e}")
@@ -151,7 +147,7 @@ print(f"Unbound: {frequencies['unbound']:.3e}")
 # ------------------------------------------------------------
 # Diagnostic PMF plot
 # ------------------------------------------------------------
-plt = plot_minima_diagnostics(
+fig, ax = plot_minima_diagnostics(
     bin_centers,
     F,
     F_star,
@@ -195,7 +191,7 @@ for i in range(bound - 1, 0, -1):
     if F[i] > F[i - 1] and F[i] > F[i + 1]:
         bound_start = i
         break
-print(f'Bound minima found to start at bin {bound_start} corresponding to {bin_centers[bound_start]}')
+print(f'\nBound minima found to start at bin {bound_start} corresponding to {bin_centers[bound_start]}')
 
 result_off = solve_smoluchowski(
     F=F,
@@ -211,7 +207,7 @@ result_off = solve_smoluchowski(
     diagnostic=True
 )
 
-print(result_off["status"])
+print('\n' + result_off["status"])
 print("k_model off:", result_off["k_model"])
 print("dt used:", result_off["dt"])
 

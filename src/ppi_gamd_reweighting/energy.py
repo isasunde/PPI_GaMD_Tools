@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.typing import ArrayLike
 
-from .constants import BOLTZMANN_KCAL, V0
+from .constants import BOLTZMANN_KCAL, STANDARD_VOLUME, GAS_CONSTANT
 
 def binding_free_energy(
     pmf: ArrayLike,
@@ -13,7 +13,7 @@ def binding_free_energy(
     y_bins: ArrayLike,
     z_bins: ArrayLike,
     bin_size: ArrayLike,
-    V0: float = V0,
+    V0: float = STANDARD_VOLUME,
     temperature: float = 300.0,
 ) -> tuple[
     float | None,
@@ -24,6 +24,7 @@ def binding_free_energy(
     float,
 ]:
     """Calculate binding free energy from a three-dimensional Cartesian PMF.
+    Based on equations and definitions from Wang and Miao 2022.
 
     The binding free energy is calculated by separating the PMF into
     bound and unbound regions based on the radial distance from the
@@ -41,8 +42,7 @@ def binding_free_energy(
 
         r = sqrt(x^2 + y^2 + z^2)
 
-    The intermediate region, rb < r < ru, is excluded from the
-    calculation.
+    The intermediate region, rb < r < ru, is excluded from the calculation.
 
     Parameters
     ----------
@@ -71,6 +71,10 @@ def binding_free_energy(
     dG
         Binding free energy in kcal/mol. Returns ``None`` if no bound
         or unbound bins are available.
+    nbound
+        No. of bins counted as within the bound region.
+    nunbound
+        No. of bins counted as within the unbound region
     V_bound
         Configurational volume of the bound region.
     V_bound0
@@ -85,37 +89,19 @@ def binding_free_energy(
     # -----------------------------------------------------------------
     # Convert inputs to NumPy arrays.
     # -----------------------------------------------------------------
-    pmf = np.asarray(
-        pmf,
-        dtype=float,
-    )
+    pmf = np.asarray(pmf, dtype=float)
 
-    x_bins = np.asarray(
-        x_bins,
-        dtype=float,
-    )
-    y_bins = np.asarray(
-        y_bins,
-        dtype=float,
-    )
-    z_bins = np.asarray(
-        z_bins,
-        dtype=float,
-    )
+    x_bins = np.asarray(x_bins, dtype=float)
+    y_bins = np.asarray(y_bins, dtype=float)
+    z_bins = np.asarray(z_bins, dtype=float)
 
     # -----------------------------------------------------------------
     # Validate input parameters.
     # -----------------------------------------------------------------
     if pmf.ndim != 3:
-        raise ValueError(
-            "PMF must be a three-dimensional array."
-        )
+        raise ValueError("PMF must be a three-dimensional array.")
 
-    expected_shape = (
-        len(x_bins),
-        len(y_bins),
-        len(z_bins),
-    )
+    expected_shape = (len(x_bins), len(y_bins), len(z_bins))
 
     if pmf.shape != expected_shape:
         raise ValueError(
@@ -124,9 +110,7 @@ def binding_free_energy(
         )
 
     if rb < 0:
-        raise ValueError(
-            "Bound-state radius must be zero or greater."
-        )
+        raise ValueError("Bound-state radius must be zero or greater.")
 
     if ru <= rb:
         raise ValueError(
@@ -135,9 +119,7 @@ def binding_free_energy(
         )
 
     if len(bin_size) != 3:
-        raise ValueError(
-            "Bin size must contain three values."
-        )
+        raise ValueError("Bin size must contain three values.")
 
     if any(size <= 0 for size in bin_size):
         raise ValueError(
@@ -150,9 +132,7 @@ def binding_free_energy(
         )
 
     if temperature <= 0:
-        raise ValueError(
-            "Temperature must be greater than zero."
-        )
+        raise ValueError("Temperature must be greater than zero.")
 
     # -----------------------------------------------------------------
     # Calculate thermodynamic constants and bin volume.
@@ -160,11 +140,7 @@ def binding_free_energy(
     kBT = BOLTZMANN_KCAL * temperature
     beta = 1.0 / kBT
 
-    dV_bin = (
-        bin_size[0]
-        * bin_size[1]
-        * bin_size[2]
-    )
+    dV_bin = (bin_size[0] * bin_size[1] * bin_size[2])
 
     # -----------------------------------------------------------------
     # Shift PMF baseline to zero.
@@ -172,9 +148,7 @@ def binding_free_energy(
     pmf = pmf.copy()
 
     if not np.any(np.isfinite(pmf)):
-        raise ValueError(
-            "PMF contains no finite values."
-        )
+        raise ValueError("PMF contains no finite values.")
 
     pmf -= np.nanmin(pmf)
 
@@ -197,19 +171,14 @@ def binding_free_energy(
                 if not np.isfinite(pmf[ix, iy, iz]):
                     continue
 
+                # Find volume of current bin
                 x = x_bins[ix]
                 y = y_bins[iy]
                 z = z_bins[iz]
 
-                r = np.sqrt(
-                    x**2
-                    + y**2
-                    + z**2
-                )
+                r = np.sqrt(x**2 + y**2 + z**2)
 
-                boltzmann_weight = np.exp(
-                    -beta * pmf[ix, iy, iz]
-                )
+                boltzmann_weight = np.exp(-beta * pmf[ix, iy, iz])
 
                 if r <= rb:
                     n_bound += 1
@@ -262,16 +231,11 @@ def binding_free_energy(
     # -----------------------------------------------------------------
     # Calculate unbound-state work and binding free energy.
     # -----------------------------------------------------------------
-    dW = -kBT * np.log(
-        V_unbound / V_unbound0
-    )
+    # Equation 10: Delta W_3D = -R*T*ln((sum_u e^(-Beta*W(r)) dr)/(sum_u dr))
+    dW = - BOLTZMANN_KCAL * temperature * np.log(V_unbound / V_unbound0)
 
-    dG = (
-        -kBT * np.log(
-            V_bound / V0
-        )
-        - dW
-    )
+    # Equation 9: DeltaG^0 = - Delta W_3D - RT*ln(Vb/V0)
+    dG = - dW - BOLTZMANN_KCAL * temperature * np.log(V_bound / V0)
 
     return (
         dG,

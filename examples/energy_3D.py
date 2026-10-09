@@ -6,6 +6,7 @@ import numpy as np
 from ppi_gamd_reweighting import (
     calc_anharmonicity,
     calc_pmf_3D,
+    plot_pmf_3D,
     load_gamd_log,
     load_reaction_coord,
     binding_free_energy,
@@ -16,9 +17,9 @@ from ppi_gamd_reweighting import (
 # ---------------------------------------------------------------------
 example_dir = Path(__file__).parent / "data"
 
-log_file = example_dir / "kinetic_GaMD.log"
+log_file = example_dir / "energy_GaMD.log"
 
-coord_file = example_dir / "kinetic_vector.dat"
+coord_file = example_dir / "energy_vector.dat"
 
 # ---------------------------------------------------------------------
 # Analysis parameters
@@ -28,7 +29,6 @@ coord_type2 = "y-dist"
 coord_type3 = "z-dist"
 
 bin_size = 1.0
-
 cutoff = 10
 temperature = 300.0
 
@@ -53,6 +53,7 @@ coord3 = load_reaction_coord(
     coord_type3,
 )
 print("Done loading data.")
+
 # ---------------------------------------------------------------------
 # Construct total PPI-GaMD boost potential
 # ---------------------------------------------------------------------
@@ -65,7 +66,7 @@ delta_U = (
 # Evaluate boost-potential distribution
 # ---------------------------------------------------------------------
 print("\nEvaluating boost-potential distribution...")
-gamma = calc_anharmonicity(delta_U)
+gamma = calc_anharmonicity(delta_U, temperature)
 
 print(
     f"Boost-potential anharmonicity: {gamma:.3f}"
@@ -87,20 +88,43 @@ F_star, F, bin_centers1, bin_centers2, bin_centers3, counts = calc_pmf_3D(
 )
 print("Done calculating PMFs.")
 
+plot_pmf_3D(
+    F_star=F_star,
+    F = F,
+    bin_centers1 = bin_centers1,
+    bin_centers2 = bin_centers2,
+    bin_centers3 = bin_centers3,
+    counts = counts,
+    coord_type1 = coord_type1,
+    coord_type2 = coord_type2,
+    coord_type3 = coord_type3,
+    )
+
+# ---------------------------------------------------------------------
+# Evaluate boost-potential distribution based on reweighting bins
+# ---------------------------------------------------------------------
+print("\nEvaluating boost-potential distribution...")
+gamma = calc_anharmonicity(delta_U, temperature, bins = len(bin_centers1)*len(bin_centers2)*len(bin_centers3))
+
+print(
+    f"Boost-potential anharmonicity: {gamma:.3f}"
+)
+
 # ---------------------------------------------------------------------
 # Calculate binding energetics for reweighted PMF
 # ---------------------------------------------------------------------
 print("\nCalculating binding energetics for reweighted PMF...")
 dG, n_bound, n_unbound, V_bound, V_bound0, dW, V_unbound, V_unbound0, = binding_free_energy(
     pmf=F,
-    rb=5.0,
-    ru=10.0,
+    rb=25.0,
+    ru=30.0,
     x_bins=bin_centers1,
     y_bins=bin_centers2,
     z_bins=bin_centers3,
     bin_size=np.array((bin_size, bin_size, bin_size)),
     temperature=temperature,
 )
+
 # -----------------------------------------------------------------
 # Print calculation summary.
 # -----------------------------------------------------------------
@@ -150,14 +174,15 @@ else:
 print("\nCalculating binding energetics for biased PMF...")
 dG, n_bound, n_unbound, V_bound, V_bound0, dW, V_unbound, V_unbound0, = binding_free_energy(
     pmf=F_star,
-    rb=5.0,
-    ru=10.0,
+    rb=25.0,
+    ru=30.0,
     x_bins=bin_centers1,
     y_bins=bin_centers2,
     z_bins=bin_centers3,
     bin_size=np.array((bin_size, bin_size, bin_size)),
     temperature=temperature,
 )
+
 # -----------------------------------------------------------------
 # Print calculation summary.
 # -----------------------------------------------------------------

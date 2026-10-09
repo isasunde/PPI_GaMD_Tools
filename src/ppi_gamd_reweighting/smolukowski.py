@@ -228,18 +228,15 @@ def find_residence_times(
 
     """
     if len(x) != len(boost):
-        raise ValueError("The same number of frames must be included for the reaction coordinate and the boost")
+        raise ValueError(
+            "The same number of frames must be included for the reaction coordinate and the boost"
+            )
 
     bound_times = []
     unbound_times = []
     
     min_event_frames = int(np.ceil(min_event_duration / frame_dt))
-    
-    print(
-        f"Only including bound/unbound events lasting at least "
-        f"{min_event_duration:.1f} ns, corresponding to ({min_event_frames} frames)"
-    )
-    
+        
     # State labels:
     # -1 = intermediate / ambiguous
     #  0 = bound
@@ -295,10 +292,13 @@ def find_residence_times(
     unbound_times = np.asarray(unbound_times, dtype=float) * frame_dt * 1e-9
     
     if len(bound_times) == 0 or len(unbound_times) == 0:
-        print(f"No complete bound/unbound transitions longer than {min_event_duration:.1f} ns observed. Skipping.")
+        print(
+            "No complete bound/unbound transitions longer "
+            f"than {min_event_duration:.1f} ns observed. Skipping."
+            )
         return None, None
     
-    print(f"{len(bound_times)} binding & {len(unbound_times)} unbinding events observed")
+    print(f"\nObserved; {len(bound_times)} binding & {len(unbound_times)} unbinding events")
     
     tau_b = np.mean(bound_times)
     tau_u = np.mean(unbound_times)
@@ -480,9 +480,7 @@ def solve_smoluchowski(
         raise ValueError("x must be strictly increasing.")
 
     if not np.allclose(dxs, dxs[0], rtol=1e-6, atol=1e-10):
-        raise(
-            "Warning: x spacing is not perfectly uniform. "
-        )
+        raise ValueError("Warning: x spacing is not perfectly uniform. ")
 
     dx = dxs[0]
 

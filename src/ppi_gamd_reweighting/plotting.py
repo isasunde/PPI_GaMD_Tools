@@ -25,21 +25,10 @@ def plot_pmf_1D(
             f"Unknown reaction-coordinate type: {coord_type}"
         ) from exc
 
-    fig, ax = plt.subplots(
-        figsize=(6, 4)
-    )
+    fig, ax = plt.subplots(figsize=(6, 4))
 
-    ax.plot(
-        bin_centers,
-        F_star,
-        label="Biased PMF",
-    )
-
-    ax.plot(
-        bin_centers,
-        F,
-        label="Reweighted PMF",
-    )
+    ax.plot(bin_centers, F_star, label="Biased PMF")
+    ax.plot(bin_centers, F, label="Reweighted PMF",)
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel("PMF (kcal/mol)")
@@ -91,22 +80,12 @@ def plot_pmf_2D(
     axes
         Array of Matplotlib axes.
     """
-    F_star = np.asarray(
-        F_star,
-        dtype=float,
-    )
-    F = np.asarray(
-        F,
-        dtype=float,
-    )
-    bin_centers1 = np.asarray(
-        bin_centers1,
-        dtype=float,
-    )
-    bin_centers2 = np.asarray(
-        bin_centers2,
-        dtype=float,
-    )
+    F_star = np.asarray(F_star, dtype=float)
+    F = np.asarray(F, dtype=float)
+
+    bin_centers1 = np.asarray(bin_centers1, dtype=float)
+    bin_centers2 = np.asarray(bin_centers2, dtype=float)
+
     counts = np.asarray(counts)
 
     # Validate reaction-coordinate types.
@@ -129,10 +108,7 @@ def plot_pmf_2D(
             "Population counts must have the same shape as the PMFs."
         )
 
-    expected_shape = (
-        len(bin_centers1),
-        len(bin_centers2),
-    )
+    expected_shape = (len(bin_centers1), len(bin_centers2))
 
     if F_star.shape != expected_shape:
         raise ValueError(
@@ -141,17 +117,13 @@ def plot_pmf_2D(
         )
 
     if padding < 0:
-        raise ValueError(
-            "Padding must be zero or greater."
-        )
+        raise ValueError("Padding must be zero or greater.")
 
     # Identify the region containing sampled configurations.
     occupied = np.isfinite(F_star)
 
     if not np.any(occupied):
-        raise ValueError(
-            "The PMF contains no populated bins."
-        )
+        raise ValueError("The PMF contains no populated bins.")
 
     rows = np.where(np.any(occupied, axis=1))[0]
     cols = np.where(np.any(occupied, axis=0))[0]
@@ -166,55 +138,25 @@ def plot_pmf_2D(
     x = bin_centers1[xmin:xmax]
     y = bin_centers2[ymin:ymax]
 
-    F_star_plot = F_star[
-        xmin:xmax,
-        ymin:ymax,
-    ].copy()
+    F_star_plot = F_star[xmin:xmax, ymin:ymax].copy()
 
-    F_plot = F[
-        xmin:xmax,
-        ymin:ymax,
-    ].copy()
+    F_plot = F[xmin:xmax, ymin:ymax].copy()
 
-    counts_plot = counts[
-        xmin:xmax,
-        ymin:ymax,
-    ].copy()
+    counts_plot = counts[xmin:xmax, ymin:ymax].copy()
 
     # Determine bin widths.
     bin_size1 = np.mean(np.diff(bin_centers1))
     bin_size2 = np.mean(np.diff(bin_centers2))
 
     # Pad the coordinate arrays beyond the sampled region.
-    x_lower = x[0] - bin_size1 * np.arange(
-        padding,
-        0,
-        -1,
-    )
+    x_lower = x[0] - bin_size1 * np.arange(padding, 0, -1)
+    x_upper = x[-1] + bin_size1 * np.arange(1, padding + 1)
 
-    x_upper = x[-1] + bin_size1 * np.arange(
-        1,
-        padding + 1,
-    )
+    y_lower = y[0] - bin_size2 * np.arange(padding, 0, -1) 
+    y_upper = y[-1] + bin_size2 * np.arange(1, padding + 1)
 
-    y_lower = y[0] - bin_size2 * np.arange(
-        padding,
-        0,
-        -1,
-    )
-
-    y_upper = y[-1] + bin_size2 * np.arange(
-        1,
-        padding + 1,
-    )
-
-    x = np.concatenate(
-        [x_lower, x, x_upper]
-    )
-
-    y = np.concatenate(
-        [y_lower, y, y_upper]
-    )
+    x = np.concatenate([x_lower, x, x_upper])
+    y = np.concatenate([y_lower, y, y_upper])
 
     # Pad PMF arrays with NaN. These will later be displayed
     # at the maximum plotting energy.
@@ -241,11 +183,7 @@ def plot_pmf_2D(
     )
 
     # Construct a coordinate grid from the bin centers.
-    X_grid, Y_grid = np.meshgrid(
-        x,
-        y,
-        indexing="ij",
-    )
+    X_grid, Y_grid = np.meshgrid(x, y, indexing="ij")
 
     # Use a shared free-energy scale for biased and reweighted PMFs.
     finite_energies = np.concatenate(
@@ -258,11 +196,7 @@ def plot_pmf_2D(
     if np.isclose(Emax, 0.0):
         Emax = 1.0
 
-    levels = np.linspace(
-        0.0,
-        Emax,
-        31,
-    )
+    levels = np.linspace(0.0, Emax, 31)
 
     F_star_plot[np.isnan(F_star_plot)] = Emax
     F_star_plot[F_star_plot > Emax] = Emax
@@ -298,9 +232,7 @@ def plot_pmf_2D(
         linewidths=0.5,
     )
     
-    axes[0].set_title(
-        "Biased PMF"
-    )
+    axes[0].set_title("Biased PMF")
 
     # Plot reweighted PMF.
     cf = axes[1].contourf(
@@ -320,9 +252,7 @@ def plot_pmf_2D(
         linewidths=0.5,
     )
 
-    axes[1].set_title(
-        "Reweighted PMF"
-    )
+    axes[1].set_title("Reweighted PMF")
 
     # Shared colorbar for the two PMFs.
     cbar = fig.colorbar(
@@ -339,9 +269,7 @@ def plot_pmf_2D(
         shading="auto",
     )
 
-    axes[2].set_title(
-        "Population map"
-    )
+    axes[2].set_title("Population map")
 
     fig.colorbar(
         population,
@@ -353,14 +281,8 @@ def plot_pmf_2D(
     for ax in axes:
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-        ax.set_xlim(
-            x[0],
-            x[-1],
-        )
-        ax.set_ylim(
-            y[0],
-            y[-1],
-        )
+        ax.set_xlim(x[0], x[-1])
+        ax.set_ylim(y[0], y[-1])
 
     return fig, axes
 
@@ -418,30 +340,14 @@ def plot_pmf_3D(
     axes
         Array of Matplotlib axes.
     """
-    F_star = np.asarray(
-        F_star,
-        dtype=float,
-    )
-    F = np.asarray(
-        F,
-        dtype=float,
-    )
-    bin_centers1 = np.asarray(
-        bin_centers1,
-        dtype=float,
-    )
-    bin_centers2 = np.asarray(
-        bin_centers2,
-        dtype=float,
-    )
-    bin_centers3 = np.asarray(
-        bin_centers3,
-        dtype=float,
-    )
-    counts = np.asarray(
-        counts,
-        dtype=float,
-    )
+    F_star = np.asarray(F_star, dtype=float)
+    F = np.asarray(F, dtype=float)
+
+    bin_centers1 = np.asarray(bin_centers1, dtype=float)
+    bin_centers2 = np.asarray(bin_centers2, dtype=float)
+    bin_centers3 = np.asarray(bin_centers3, dtype=float)
+
+    counts = np.asarray(counts, dtype=float)
 
     # Validate reaction-coordinate types.
     try:
@@ -455,21 +361,13 @@ def plot_pmf_3D(
 
     # Validate temperature and padding.
     if temperature <= 0:
-        raise ValueError(
-            "Temperature must be greater than zero."
-        )
+        raise ValueError("Temperature must be greater than zero.")
 
     if padding < 0:
-        raise ValueError(
-            "Padding must be zero or greater."
-        )
+        raise ValueError("Padding must be zero or greater.")
 
     # Validate PMF dimensions.
-    expected_shape = (
-        len(bin_centers1),
-        len(bin_centers2),
-        len(bin_centers3),
-    )
+    expected_shape = (len(bin_centers1), len(bin_centers2), len(bin_centers3))
 
     if F_star.shape != expected_shape:
         raise ValueError(
@@ -506,46 +404,23 @@ def plot_pmf_3D(
     # -----------------------------------------------------------------
     # Convert 3D PMFs to probability distributions.
     #
-    # exp(-F / kBT) is proportional to probability. The arbitrary
-    # additive constant in the PMF therefore does not affect the
-    # resulting projected PMF after baseline shifting.
+    # P ∝ exp(-F / kBT) 
+    # The arbitrary additive constant in the PMF therefore does not 
+    # affect the resulting projected PMF after baseline shifting.
     # -----------------------------------------------------------------
-    P_star = np.exp(
-        -F_star / kBT
-    )
-
-    P = np.exp(
-        -F / kBT
-    )
+    P_star = np.exp(-F_star / kBT)
+    P = np.exp(-F / kBT)
 
     # -----------------------------------------------------------------
     # Marginalize probability distributions.
     # -----------------------------------------------------------------
-    Pxy_star = np.nansum(
-        P_star,
-        axis=2,
-    )
-    Pxz_star = np.nansum(
-        P_star,
-        axis=1,
-    )
-    Pyz_star = np.nansum(
-        P_star,
-        axis=0,
-    )
+    Pxy_star = np.nansum(P_star, axis=2)
+    Pxz_star = np.nansum(P_star, axis=1,)
+    Pyz_star = np.nansum(P_star, axis=0,)
 
-    Pxy = np.nansum(
-        P,
-        axis=2,
-    )
-    Pxz = np.nansum(
-        P,
-        axis=1,
-    )
-    Pyz = np.nansum(
-        P,
-        axis=0,
-    )
+    Pxy = np.nansum(P, axis=2)
+    Pxz = np.nansum(P, axis=1)
+    Pyz = np.nansum(P, axis=0)
 
     # -----------------------------------------------------------------
     # Convert projected probabilities back to PMFs.
@@ -602,9 +477,7 @@ def plot_pmf_3D(
     )
 
     if len(finite_energies) == 0:
-        raise ValueError(
-            "No finite PMF values are available for plotting."
-        )
+        raise ValueError("No finite PMF values are available for plotting.")
 
     Emax = np.max(finite_energies) * 1.2
 
@@ -695,65 +568,33 @@ def plot_pmf_3D(
         if not np.any(occupied):
             continue
 
-        rows = np.where(
-            np.any(occupied, axis=1)
-        )[0]
+        rows = np.where(np.any(occupied, axis=1))[0]
+        cols = np.where(np.any(occupied, axis=0))[0]
 
-        cols = np.where(
-            np.any(occupied, axis=0)
-        )[0]
+        xmin = max(0, rows[0] - padding)
+        xmax = min(occupancy.shape[0], rows[-1] + padding + 1)
 
-        xmin = max(
-            0,
-            rows[0] - padding,
-        )
-        xmax = min(
-            occupancy.shape[0],
-            rows[-1] + padding + 1,
-        )
-
-        ymin = max(
-            0,
-            cols[0] - padding,
-        )
-        ymax = min(
-            occupancy.shape[1],
-            cols[-1] + padding + 1,
-        )
+        ymin = max(0, cols[0] - padding)
+        ymax = min(occupancy.shape[1], cols[-1] + padding + 1)
 
         x = centers1[xmin:xmax]
         y = centers2[ymin:ymax]
 
-        occupancy_plot = occupancy[
-            xmin:xmax,
-            ymin:ymax,
-        ].copy()
+        occupancy_plot = occupancy[xmin:xmax, ymin:ymax].copy()
 
-        pmf_star_plot = pmf_star[
-            xmin:xmax,
-            ymin:ymax,
-        ].copy()
+        pmf_star_plot = pmf_star[xmin:xmax, ymin:ymax].copy()
 
-        pmf_plot = pmf[
-            xmin:xmax,
-            ymin:ymax,
-        ].copy()
+        pmf_plot = pmf[xmin:xmax, ymin:ymax].copy()
 
         # -------------------------------------------------------------
         # Construct coordinate grid.
         # -------------------------------------------------------------
-        X, Y = np.meshgrid(
-            x,
-            y,
-            indexing="ij",
-        )
+        X, Y = np.meshgrid(x, y, indexing="ij")
 
         # -------------------------------------------------------------
         # Occupancy plot.
         # -------------------------------------------------------------
-        occupancy_plot = np.log10(
-            occupancy_plot + 1
-        )
+        occupancy_plot = np.log10(occupancy_plot + 1)
 
         im1 = axes[row, 0].contourf(
             X,
@@ -813,21 +654,11 @@ def plot_pmf_3D(
         for col in range(3):
             axes[row, col].set_xlabel(label1)
             axes[row, col].set_ylabel(label2)
-            axes[row, col].grid(
-                alpha=0.2
-            )
+            axes[row, col].grid(alpha=0.2)
 
-    axes[0, 0].set_title(
-        "Population"
-    )
-
-    axes[0, 1].set_title(
-        "Biased PMF"
-    )
-
-    axes[0, 2].set_title(
-        "Reweighted PMF"
-    )
+    axes[0, 0].set_title("Population")
+    axes[0, 1].set_title("Biased PMF")
+    axes[0, 2].set_title("Reweighted PMF")
 
     # -----------------------------------------------------------------
     # Colorbars.
@@ -839,10 +670,7 @@ def plot_pmf_3D(
         pad=0.02,
         aspect = 30
     )
-
-    cbar1.set_label(
-        "log$_{10}$(population + 1)"
-    )
+    cbar1.set_label("log$_{10}$(population + 1)")
 
     cbar2 = fig.colorbar(
         im3,
@@ -851,10 +679,7 @@ def plot_pmf_3D(
         pad=0.02,
         aspect = 30
     )
-
-    cbar2.set_label(
-        "Free energy (kcal/mol)"
-    )
+    cbar2.set_label("Free energy (kcal/mol)")
 
     return fig, axes
 
@@ -879,12 +704,12 @@ def plot_minima_diagnostics(
             f"Unknown reaction-coordinate type: {exc.args[0]}"
         ) from exc
 
-    plt.figure(figsize=(6, 4))
-    plt.plot(x, F_star, label="Biased PMF", alpha=0.7)
-    plt.plot(x, F, label="Reweighted PMF", alpha=0.7)
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(x, F_star, label="Biased PMF", alpha=0.7)
+    ax.plot(x, F, label="Reweighted PMF", alpha=0.7)
     #plt.plot(x, F_solver, label="Smoothed PMF", lw=2)
     
-    plt.scatter(
+    ax.scatter(
         [x[bound], x[unbound], x[barrier]],
         [F[bound], F[unbound], F[barrier]],
         s=40,
@@ -892,8 +717,11 @@ def plot_minima_diagnostics(
         zorder=5,
     )
    
-    plt.xlabel(label)
-    plt.ylabel("PMF (kcal/mol)")
-    plt.grid(alpha=0.3)
-    plt.legend()
+    ax.set_xlabel(label)
+    ax.set_ylabel("PMF (kcal/mol)")
+    ax.grid(alpha=0.3)
+    ax.legend()
+
+    fig.tight_layout()
+
     return plt

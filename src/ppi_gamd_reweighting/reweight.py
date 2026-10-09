@@ -450,10 +450,10 @@ def calc_pmf_3D(
     np.ndarray,
     np.ndarray,
 ]:
-    """Calculate biased and cumulant-reweighted two-dimensional PMFs.
+    """Calculate biased and cumulant-reweighted three-dimensional PMFs.
 
     Reweighting uses a second-order cumulant expansion of the GaMD
-    boost potential within each two-dimensional reaction-coordinate bin.
+    boost potential within each three-dimensional reaction-coordinate bin.
     Based on equation 15 from Miao & McCammon 2017
 
     Parameters
@@ -479,9 +479,9 @@ def calc_pmf_3D(
     Returns
     -------
     F_star
-        Biased two-dimensional PMF in kcal/mol.
+        Biased three-dimensional PMF in kcal/mol.
     F
-        Reweighted two-dimensional PMF in kcal/mol.
+        Reweighted three-dimensional PMF in kcal/mol.
     bin_centers1
         Centers of bins along the first reaction coordinate.
     bin_centers2
